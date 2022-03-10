@@ -1,0 +1,4 @@
+/save/*
+/datasets/*
+/__pycache__/
+/distilbert-base-uncased/
