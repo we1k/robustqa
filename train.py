@@ -360,7 +360,7 @@ def get_dataset(args, datasets, data_dir, tokenizer, split_name):
     return util.QADataset(data_encodings, train=(split_name=='train')), dataset_dict
 
 def get_dataset(args, datasets, data_dir, tokenizer, split_name):
-    datasets = datasets.splits(',')
+    datasets = datasets.split(',')
     dataset_dict = None
     dataset_name = ''
     for dataset in datasets:
@@ -515,5 +515,41 @@ def main():
             for uuid in sorted(eval_preds):
                 csv_writer.writerow([uuid, eval_preds[uuid]])
 
+def eval():
+    args = get_train_test_args()
+
+    util.set_seed(args.seed)
+    checkpoint = args.model
+  
+    print(checkpoint)
+    
+    if args.resume_training:
+        checkpoint_path = os.path.join(args.save_dir, 'checkpoint')
+        model = AutoModelForQuestionAnswering.from_pretrained(checkpoint_path)
+    else:
+        model = AutoModelForQuestionAnswering.from_pretrained(checkpoint)
+        args.save_dir = util.get_save_dir(args.save_dir, args.run_name)
+    tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+    
+
+    log = util.get_logger(args.save_dir, f'log_train')
+    args.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    trainer = Trainer(args, log)
+    model.to(args.device)
+    train_dataset, _ = get_dataset(args, args.train_datasets, args.train_dir, tokenizer, 'train')
+    val_dataset, val_dict = get_dataset(args, 'race', 'datasets/oodomain_val', tokenizer, 'val')
+    train_loader = DataLoader(train_dataset,
+                            batch_size=args.batch_size,
+                            sampler=RandomSampler(train_dataset))
+    val_loader = DataLoader(val_dataset,
+                            batch_size=args.batch_size,
+                            sampler=SequentialSampler(val_dataset))
+
+
+    preds, curr_score = trainer.evaluate(model, val_loader, val_dict, return_preds=True)
+    results_str = ', '.join(f'{k}: {v:05.2f}' for k, v in curr_score.items())
+    print(results_str)
+
 if __name__ == '__main__':
     main()
+    # eval()
